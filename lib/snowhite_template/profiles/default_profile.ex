@@ -27,6 +27,7 @@ defmodule SnowhiteTemplate.Profiles.Default do
     feeds: [
       {"Hacker News", "https://hnrss.org/newest"}
     ],
-    persist_app: :snowhite
+    persist_app: :snowhite,
+    qr_codes: false
   )
 end
