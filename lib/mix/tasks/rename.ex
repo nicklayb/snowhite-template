@@ -112,12 +112,14 @@ defmodule Mix.Tasks.Rename do
   end
 
   defp rename(%State{} = state, file) do
-    case rename_file(state, file) do
-      {:ok, {old_file, new_file}} ->
-        log("Renaming #{file} to #{new_file}")
-        wet(state, fn -> File.rename!(old_file, new_file) end)
+    file = update_file_path(state, file)
 
-        if State.dry_run?(state), do: old_file, else: new_file
+    case State.replace(state, file) do
+      {:ok, new_file} ->
+        log("Renaming #{file} to #{new_file}")
+        wet(state, fn -> File.rename!(file, new_file) end)
+
+        if State.dry_run?(state), do: file, else: new_file
 
       {:noop, _} ->
         log("Skipped #{file}")
@@ -125,7 +127,7 @@ defmodule Mix.Tasks.Rename do
     end
   end
 
-  defp rename_file(state, file_name) do
+  defp update_file_path(state, file_name) do
     [head | tail] =
       file_name
       |> Path.split()
@@ -133,20 +135,9 @@ defmodule Mix.Tasks.Rename do
 
     updated_tail = Enum.map(tail, &State.replace_occurences(state, &1))
 
-    case State.replace(state, head) do
-      {:ok, new_head} ->
-        [old_file, new_file] =
-          Enum.map([head, new_head], fn h ->
-            [h | updated_tail]
-            |> Enum.reverse()
-            |> Path.join()
-          end)
-
-        {:ok, {old_file, new_file}}
-
-      noop ->
-        noop
-    end
+    [head | updated_tail]
+    |> Enum.reverse()
+    |> Path.join()
   end
 
   defp replace(%State{files: files} = state) do
