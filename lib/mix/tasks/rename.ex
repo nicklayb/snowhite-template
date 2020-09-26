@@ -31,20 +31,26 @@ defmodule Mix.Tasks.Rename do
 
     def atom_name(%State{module_name: {_, name}}), do: name
 
-    def replace(%State{original: {module, atom}, module_name: {new_module, new_atom}}, string) do
-      replacements = [
-        {module, new_module},
-        {atom, new_atom}
-      ]
-
-      out =
-        Enum.reduce(replacements, string, fn {old, new}, acc -> String.replace(acc, old, new) end)
+    def replace(%State{} = state, string) do
+      out = replace_occurences(state, string)
 
       if out === string do
         {:noop, out}
       else
         {:ok, out}
       end
+    end
+
+    def replace_occurences(
+          %State{original: {module, atom}, module_name: {new_module, new_atom}},
+          string
+        ) do
+      replacements = [
+        {module, new_module},
+        {atom, new_atom}
+      ]
+
+      Enum.reduce(replacements, string, fn {old, new}, acc -> String.replace(acc, old, new) end)
     end
 
     defp get_cases(module_name), do: {module_name, Macro.underscore(module_name)}
@@ -101,41 +107,68 @@ defmodule Mix.Tasks.Rename do
   end
 
   defp rename(%State{files: files} = state) do
-    files =
-      Enum.map(files, fn file ->
-        case State.replace(state, file) do
-          {:ok, new_file} ->
-            log("Renaming #{file} to #{new_file}")
-            wet(state, fn -> File.rename!(file, new_file) end)
-
-            if State.dry_run?(state), do: file, else: new_file
-
-          {:noop, _} ->
-            log("Skipped #{file}")
-            file
-        end
-      end)
+    files = Enum.map(files, &rename(state, &1))
 
     %State{state | files: files}
   end
 
+  defp rename(%State{} = state, file) do
+    case rename_file(state, file) do
+      {:ok, {old_file, new_file}} ->
+        log("Renaming #{file} to #{new_file}")
+        wet(state, fn -> File.rename!(old_file, new_file) end)
+
+        if State.dry_run?(state), do: old_file, else: new_file
+
+      {:noop, _} ->
+        log("Skipped #{file}")
+        file
+    end
+  end
+
+  defp rename_file(state, file_name) do
+    [head | tail] =
+      file_name
+      |> Path.split()
+      |> Enum.reverse()
+
+    updated_tail = Enum.map(tail, &State.replace_occurences(state, &1))
+
+    case State.replace(state, head) do
+      {:ok, new_head} ->
+        [old_file, new_file] =
+          Enum.map([head, new_head], fn h ->
+            [h | updated_tail]
+            |> Enum.reverse()
+            |> Path.join()
+          end)
+
+        {:ok, {old_file, new_file}}
+
+      noop ->
+        noop
+    end
+  end
+
   defp replace(%State{files: files} = state) do
-    Enum.each(files, fn file ->
-      if not File.dir?(file) do
-        old_content = File.read!(file)
-
-        case State.replace(state, old_content) do
-          {:ok, new_content} ->
-            log("Replacing content in file #{file}")
-            wet(state, fn -> File.write!(file, new_content) end)
-
-          {:noop, _} ->
-            log("Skipping #{file}")
-        end
-      end
-    end)
+    Enum.each(files, &replace(state, &1))
 
     state
+  end
+
+  defp replace(%State{} = state, file) do
+    if not File.dir?(file) do
+      old_content = File.read!(file)
+
+      case State.replace(state, old_content) do
+        {:ok, new_content} ->
+          log("Replacing content in file #{file}")
+          wet(state, fn -> File.write!(file, new_content) end)
+
+        {:noop, _} ->
+          log("Skipping #{file}")
+      end
+    end
   end
 
   defp wet(state, fun) do
