@@ -69,8 +69,7 @@ defmodule Mix.Tasks.Rename do
   @cleanable_folders [
     "assets/node_modules",
     "_build",
-    ".elixir_ls",
-    "deps"
+    ".elixir_ls"
   ]
   defp clean_folders(%State{} = state) do
     Enum.each(@cleanable_folders, fn folder ->
