@@ -70,7 +70,7 @@ defmodule Mix.Tasks.Rename do
     Enum.each(@cleanable_folders, fn folder ->
       log("Removing #{folder}")
 
-      wet(state, fn -> File.rm!(folder) end)
+      wet(state, fn -> File.rm_rf!(folder) end)
     end)
 
     state
