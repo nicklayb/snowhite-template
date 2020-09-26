@@ -1,0 +1,7 @@
+.elixir_ls
+_build
+deps
+Makefile
+README.md
+.gitignore
+assets/node_modules
