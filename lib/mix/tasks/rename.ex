@@ -28,6 +28,7 @@ defmodule Mix.Tasks.Rename do
     def dry_run?(%State{options: options}), do: Keyword.get(options, :dry_run) == true
 
     def module_name(%State{module_name: {name, _}}), do: name
+
     def atom_name(%State{module_name: {_, name}}), do: name
 
     def replace(%State{original: {module, atom}, module_name: {new_module, new_atom}}, string) do
@@ -36,9 +37,14 @@ defmodule Mix.Tasks.Rename do
         {atom, new_atom}
       ]
 
-      Enum.reduce(replacements, string, fn {old, new}, acc ->
-        String.replace(acc, old, new)
-      end)
+      out =
+        Enum.reduce(replacements, string, fn {old, new}, acc -> String.replace(acc, old, new) end)
+
+      if out === string do
+        {:noop, out}
+      else
+        {:ok, out}
+      end
     end
 
     defp get_cases(module_name), do: {module_name, Macro.underscore(module_name)}
@@ -64,7 +70,7 @@ defmodule Mix.Tasks.Rename do
     Enum.each(@cleanable_folders, fn folder ->
       log("Removing #{folder}")
 
-      wet(state, fn -> File.rm(folder) end)
+      wet(state, fn -> File.rm!(folder) end)
     end)
 
     state
@@ -97,11 +103,17 @@ defmodule Mix.Tasks.Rename do
   defp rename(%State{files: files} = state) do
     files =
       Enum.map(files, fn file ->
-        new_file = State.replace(state, file)
-        log("Renaming #{file} to #{new_file}")
-        wet(state, fn -> File.rename!(file, State.replace(state, file)) end)
+        case State.replace(state, file) do
+          {:ok, new_file} ->
+            log("Renaming #{file} to #{new_file}")
+            wet(state, fn -> File.rename!(file, new_file) end)
 
-        if State.dry_run?(state), do: file, else: new_file
+            if State.dry_run?(state), do: file, else: new_file
+
+          {:noop, _} ->
+            log("Skipped #{file}")
+            file
+        end
       end)
 
     %State{state | files: files}
@@ -109,11 +121,18 @@ defmodule Mix.Tasks.Rename do
 
   defp replace(%State{files: files} = state) do
     Enum.each(files, fn file ->
-      old_content = File.read!(file)
-      new_content = State.replace(state, old_content)
+      if not File.dir?(file) do
+        old_content = File.read!(file)
 
-      log("Replacing content in file #{file}")
-      wet(state, fn -> File.write!(file, new_content) end)
+        case State.replace(state, old_content) do
+          {:ok, new_content} ->
+            log("Replacing content in file #{file}")
+            wet(state, fn -> File.write!(file, new_content) end)
+
+          {:noop, _} ->
+            log("Skipping #{file}")
+        end
+      end
     end)
 
     state
