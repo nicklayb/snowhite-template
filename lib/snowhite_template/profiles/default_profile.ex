@@ -30,4 +30,11 @@ defmodule SnowhiteTemplate.Profiles.Default do
     persist_app: :snowhite,
     qr_codes: false
   )
+
+  register_module(:top_right, Snowhite.Modules.Suntime,
+    timezone: @timezone,
+    locale: @locale,
+    latitude: 43.653225,
+    longitude: -79.383186
+  )
 end
