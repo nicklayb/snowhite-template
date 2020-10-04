@@ -86,7 +86,8 @@ defmodule Mix.Tasks.Rename do
     ".elixir_ls",
     "deps",
     "_build",
-    "priv/static"
+    "priv/static",
+    "lib/mix/tasks/rename.ex"
   ]
 
   defp put_files(%State{} = state) do
